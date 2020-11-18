@@ -3,7 +3,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
-
+use sp_std::prelude::*;
 use codec::{Decode, Encode};
 use frame_support::{
     construct_runtime, debug, parameter_types,

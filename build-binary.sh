@@ -1,2 +1,2 @@
-cargo +nightly-2020-10-01 build --release 
-mv target/release/plasm-node ~/plasm/Plasm
+cargo build --release 
+mv target/release/plasm-node ~/Plasm

@@ -772,7 +772,6 @@ fn valid_instatiate(wasm: Vec<u8>, code_hash: CodeHash<Test>) {
 //         });
 // }
 
-
 // #[test]
 // fn update_parameters_failed() {
 //     let (wasm, code_hash) = compile_module::<Test>(CODE_RETURN_FROM_START_FN).unwrap();

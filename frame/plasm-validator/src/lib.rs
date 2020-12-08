@@ -75,6 +75,14 @@ decl_storage! {
         pub ElectedValidators get(fn elected_validators):
             map hasher(twox_64_concat) EraIndex => Option<Vec<T::AccountId>>;
 
+        /// The currently elected contracts that receives block rewards.
+        pub ElectedContracts get(fn elected_contracts):
+            map hasher(twox_64_concat) EraIndex => Option<Vec<T::AccountId>>;
+
+        /// The currently elected operators that receives block rewards.
+        pub ElectedOperators get(fn elected_operators):
+            map hasher(twox_64_concat) EraIndex => Option<Vec<T::AccountId>>;
+
         /// Set of next era accounts that can validate blocks.
         pub Validators get(fn validators) config(): Vec<T::AccountId>;
     }
@@ -96,10 +104,15 @@ decl_module! {
                             return;
                         }
                     };
-                    let actual_rewarded = Self::reward_to_validators(&untreated_era, &rewards);
+
+                    // TODO: distribute rewards to 5:1:4 = validator rewards : contract validators : operators
+                    let validator_rewards: u128 = rewards * 0.5; // for validator
+                    let contract_rewards: u128 = rewards * 0.1; // for layer 2
+                    let operator_rewards: u128 = rewards * 0.4; // for layer 2 operators
+                    let validator_rewarded = Self::reward_to_validators(&untreated_era, &validator_rewards);
 
                     // deposit event to total validator rewards
-                    Self::deposit_event(RawEvent::TotalValidatorRewards(untreated_era, actual_rewarded));
+                    Self::deposit_event(RawEvent::TotalValidatorRewards(untreated_era, validator_rewarded));
 
                     untreated_era+=1;
                 }
@@ -131,8 +144,13 @@ decl_event!(
     {
         /// Validator set changed.
         NewValidators(Vec<AccountId>),
+        // TODO: aggregate events from each rewardees.
         /// The amount of minted rewards for validators.
         ValidatorReward(EraIndex, AccountId, Balance),
+        /// The amount of minted rewards for contracts.
+        ContractReward(EraIndex, AccountId, Balance),
+        /// The amount of minted rewards for operators.
+        OperatorReward(EraIndex, AccountId, Balance),
         /// The total amount of minted rewards for validators.
         TotalValidatorRewards(EraIndex, Balance),
     }
@@ -141,12 +159,12 @@ decl_event!(
 impl<T: Trait> Module<T> {
     pub fn reward_to_validators(era: &EraIndex, max_payout: &BalanceOf<T>) -> BalanceOf<T> {
         if let Some(validators) = Self::elected_validators(era) {
-            let validator_len: u64 = validators.len() as u64;
+            let validators_len: u64 = validators.len() as u64;
             let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
             for v in validators.iter() {
-                let reward =
+                let amount =
                     Perbill::from_rational_approximation(1, validator_len) * max_payout.clone();
-                total_imbalance.subsume(Self::reward_validator(v, reward));
+                total_imbalance.subsume(Self::pay_reward(v, amount));
             }
             let total_payout = total_imbalance.peek();
 
@@ -160,9 +178,51 @@ impl<T: Trait> Module<T> {
         }
     }
 
-    fn reward_validator(stash: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
-        T::Currency::deposit_into_existing(&stash, reward)
+    fn pay_reward(account: &T::AccountId, reward: BalanceOf<T>) -> PositiveImbalanceOf<T> {
+        T::Currency::deposit_into_existing(&account, reward)
             .unwrap_or(PositiveImbalanceOf::<T>::zero())
+    }
+
+    pub fn reward_to_contracts(era: &EraIndex, max_payout: &BalanceOf<T>) -> BalanceOf<T> {
+        if let Some(contracts) = Self::elected_contracts(era) {
+            let contracts_len: u64 = contracts.len() as u64;
+            let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
+            for c in contracts.iter() {
+                let amount =
+                    Perbill::from_rational_approximation(1, contracts_len) * max_payout.clone();
+                total_imbalance.subsume(Self::pay_reward(c, amount));
+            }
+            let total_payout = total_imbalance.peek();
+
+            let rest = max_payout.saturating_sub(total_payout.clone());
+
+            T::Reward::on_unbalanced(total_imbalance);
+            T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
+            total_payout
+        } else {
+            BalanceOf::<T>::zero()
+        }
+    }
+
+    pub fn reward_to_operators() {
+        if let Some(operators) = Self::elected_operators(era) {
+            let operators_len: u64 = operators.len() as u64;
+            let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
+            for o in operators.iter() {
+                let amount =
+                    Perbill::from_rational_approximation(1, operators_len) * max_payout.clone();
+                total_imbalance.subsume(Self::reward_validator(o, amount));
+            }
+            let total_payout = total_imbalance.peek();
+
+            let rest = max_payout.saturating_sub(total_payout.clone());
+
+            T::Reward::on_unbalanced(total_imbalance);
+            T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
+            total_payout
+        } else {
+            BalanceOf::<T>::zero()
+        }
     }
 }
 

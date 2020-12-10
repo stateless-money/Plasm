@@ -1355,19 +1355,6 @@ dependencies = [
 
 [[package]]
 name = "ethereum"
-version = "0.3.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da7fef4d2da1de3a4f4f85408379644276db9b46c4af7b0fe38a3debec5cb7cd"
-dependencies = [
- "ethereum-types",
- "parity-scale-codec",
- "rlp",
- "rlp-derive",
- "sha3 0.8.2",
-]
-
-[[package]]
-name = "ethereum"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7538b2bb55bde83b500c4e6ea0bdb3b1c0e9e5ae57951941e5412db32c2a8344"
@@ -1378,6 +1365,23 @@ dependencies = [
  "rlp-derive",
  "serde",
  "sha3 0.9.1",
+]
+
+[[package]]
+name = "ethereum"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "01ea35e1b0845310ade8eb048d401b0b899b8eff05c4d2a3454d29ef4eb1b8af"
+dependencies = [
+ "ethereum-types",
+ "hash-db",
+ "hash256-std-hasher",
+ "parity-scale-codec",
+ "rlp",
+ "rlp-derive",
+ "serde",
+ "sha3 0.9.1",
+ "triehash",
 ]
 
 [[package]]
@@ -1408,9 +1412,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "16c8deca0ec3efa361b03d9cae6fe94321a1d2d0a523437edd720b3d140e3c08"
 dependencies = [
  "ethereum 0.4.1",
- "evm-core",
- "evm-gasometer",
- "evm-runtime",
+ "evm-core 0.17.2",
+ "evm-gasometer 0.17.2",
+ "evm-runtime 0.17.2",
+ "log",
+ "parity-scale-codec",
+ "primitive-types",
+ "rlp",
+ "serde",
+ "sha3 0.8.2",
+]
+
+[[package]]
+name = "evm"
+version = "0.18.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5286da2277b078e7033491d62e674eeccd01d913a87bb60ec0cabbcf80ec62e9"
+dependencies = [
+ "ethereum 0.4.1",
+ "evm-core 0.18.3",
+ "evm-gasometer 0.18.3",
+ "evm-runtime 0.18.3",
  "log",
  "parity-scale-codec",
  "primitive-types",
@@ -1430,13 +1452,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "evm-core"
+version = "0.18.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "63c6c39300d7779427f461408d867426e202ea72ac7ece2455689ff0e4bddb6f"
+dependencies = [
+ "parity-scale-codec",
+ "primitive-types",
+ "serde",
+]
+
+[[package]]
 name = "evm-gasometer"
 version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46de1b91ccd744627484183729f1b5af484b3bf15505007fc28cc54264cb9ea1"
 dependencies = [
- "evm-core",
- "evm-runtime",
+ "evm-core 0.17.2",
+ "evm-runtime 0.17.2",
+ "primitive-types",
+]
+
+[[package]]
+name = "evm-gasometer"
+version = "0.18.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "689c481648c3f45b64b1278077c04284ad535e068c9d6872153c7b74da7ccb03"
+dependencies = [
+ "evm-core 0.18.3",
+ "evm-runtime 0.18.3",
  "primitive-types",
 ]
 
@@ -1446,7 +1490,18 @@ version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2c1d1ffe96f833788512c890d702457d790dba4917ac6f64f8f60fbd9bc40b8"
 dependencies = [
- "evm-core",
+ "evm-core 0.17.2",
+ "primitive-types",
+ "sha3 0.8.2",
+]
+
+[[package]]
+name = "evm-runtime"
+version = "0.18.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "61a148ad1b3e0af31aa03c6c3cc9df3a529e279dad8e29b4ef90dccad32601e4"
+dependencies = [
+ "evm-core 0.18.3",
  "primitive-types",
  "sha3 0.8.2",
 ]
@@ -1495,6 +1550,78 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ca5faf057445ce5c9d4329e382b2ce7ca38550ef3b73a5348362d5f24e0c7fe3"
 dependencies = [
  "instant",
+]
+
+[[package]]
+name = "fc-consensus"
+version = "0.1.0"
+dependencies = [
+ "derive_more 0.99.11",
+ "ethereum 0.5.1",
+ "fp-consensus",
+ "futures 0.3.7",
+ "log",
+ "parity-scale-codec",
+ "sc-client-api",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-core",
+ "sp-inherents",
+ "sp-runtime",
+ "sp-timestamp",
+ "substrate-prometheus-endpoint",
+]
+
+[[package]]
+name = "fc-rpc"
+version = "0.1.0"
+dependencies = [
+ "ethereum 0.5.1",
+ "ethereum-types",
+ "fc-consensus",
+ "fc-rpc-core",
+ "fp-rpc",
+ "futures 0.3.7",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-core-client 15.1.0",
+ "jsonrpc-derive 15.1.0",
+ "jsonrpc-pubsub 15.1.0",
+ "libsecp256k1",
+ "log",
+ "pallet-ethereum",
+ "pallet-evm 2.0.0",
+ "parity-scale-codec",
+ "rand 0.7.3",
+ "rlp",
+ "rustc-hex",
+ "sc-client-api",
+ "sc-network",
+ "sc-rpc",
+ "sc-service",
+ "sha3 0.8.2",
+ "sp-api",
+ "sp-blockchain",
+ "sp-consensus",
+ "sp-io",
+ "sp-runtime",
+ "sp-storage",
+ "sp-transaction-pool",
+]
+
+[[package]]
+name = "fc-rpc-core"
+version = "0.1.0"
+dependencies = [
+ "ethereum-types",
+ "jsonrpc-core 15.1.0",
+ "jsonrpc-core-client 14.2.0",
+ "jsonrpc-derive 14.2.2",
+ "jsonrpc-pubsub 15.1.0",
+ "rustc-hex",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1606,6 +1733,41 @@ checksum = "ece68d15c92e84fa4f19d3780f1294e5ca82a78a6d515f1efaabcc144688be00"
 dependencies = [
  "matches",
  "percent-encoding 2.1.0",
+]
+
+[[package]]
+name = "fp-consensus"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "fp-evm"
+version = "0.8.0"
+dependencies = [
+ "evm 0.18.5",
+ "parity-scale-codec",
+ "serde",
+ "sp-core",
+ "sp-std",
+]
+
+[[package]]
+name = "fp-rpc"
+version = "0.1.0"
+dependencies = [
+ "ethereum 0.5.1",
+ "ethereum-types",
+ "fp-evm",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -1743,98 +1905,6 @@ checksum = "9b128f689fd9d497c3a7e881be524a8a1e2d80e2661754add6e36c9dfdcbe373"
 dependencies = [
  "parity-scale-codec",
  "sp-api",
-]
-
-[[package]]
-name = "frontier-consensus"
-version = "0.1.0"
-dependencies = [
- "derive_more 0.99.11",
- "ethereum 0.3.3",
- "frontier-consensus-primitives",
- "futures 0.3.7",
- "log",
- "parity-scale-codec",
- "sc-client-api",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-consensus",
- "sp-core",
- "sp-inherents",
- "sp-runtime",
- "sp-timestamp",
- "substrate-prometheus-endpoint",
-]
-
-[[package]]
-name = "frontier-consensus-primitives"
-version = "0.1.0"
-dependencies = [
- "parity-scale-codec",
- "sp-core",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
-name = "frontier-rpc"
-version = "0.1.0"
-dependencies = [
- "ethereum 0.3.3",
- "ethereum-types",
- "frontier-consensus",
- "frontier-rpc-core",
- "frontier-rpc-primitives",
- "futures 0.3.7",
- "jsonrpc-core 15.1.0",
- "jsonrpc-core-client 14.2.0",
- "jsonrpc-derive 14.2.2",
- "jsonrpc-pubsub 15.1.0",
- "log",
- "pallet-ethereum 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-scale-codec",
- "rlp",
- "sc-client-api",
- "sc-network",
- "sc-rpc",
- "sc-service",
- "sha3 0.8.2",
- "sp-api",
- "sp-blockchain",
- "sp-consensus",
- "sp-io",
- "sp-runtime",
- "sp-storage",
- "sp-transaction-pool",
-]
-
-[[package]]
-name = "frontier-rpc-core"
-version = "0.1.0"
-dependencies = [
- "ethereum-types",
- "jsonrpc-core 15.1.0",
- "jsonrpc-core-client 14.2.0",
- "jsonrpc-derive 14.2.2",
- "jsonrpc-pubsub 15.1.0",
- "rustc-hex",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "frontier-rpc-primitives"
-version = "0.1.0"
-dependencies = [
- "ethereum 0.3.3",
- "ethereum-types",
- "pallet-evm",
- "parity-scale-codec",
- "sp-api",
- "sp-core",
- "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
@@ -4258,16 +4328,17 @@ dependencies = [
 name = "pallet-ethereum"
 version = "0.1.0"
 dependencies = [
- "ethereum 0.3.3",
+ "ethereum 0.5.1",
  "ethereum-types",
- "evm",
+ "evm 0.18.5",
+ "fp-consensus",
+ "fp-evm",
+ "fp-rpc",
  "frame-support",
  "frame-system",
- "frontier-consensus-primitives",
- "frontier-rpc-primitives",
  "libsecp256k1",
  "pallet-balances",
- "pallet-evm",
+ "pallet-evm 2.0.0",
  "pallet-timestamp",
  "parity-scale-codec",
  "rlp",
@@ -4280,10 +4351,29 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-ethereum"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd4556fb64842e71bb6e2f98b7541c0d310069eb607d432c6ac9bdaecbfd3118"
+name = "pallet-evm"
+version = "2.0.0"
+dependencies = [
+ "evm 0.18.5",
+ "evm-gasometer 0.18.3",
+ "evm-runtime 0.18.3",
+ "fp-evm",
+ "frame-support",
+ "frame-system",
+ "impl-trait-for-tuples",
+ "pallet-balances",
+ "pallet-timestamp",
+ "parity-scale-codec",
+ "primitive-types",
+ "ripemd160",
+ "rlp",
+ "serde",
+ "sha3 0.8.2",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
 
 [[package]]
 name = "pallet-evm"
@@ -4291,7 +4381,7 @@ version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "073185bb5932eae64c6ec135a712cadbf4b2003ad728e9da01120a28ba6b6c75"
 dependencies = [
- "evm",
+ "evm 0.17.3",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
@@ -5061,7 +5151,7 @@ dependencies = [
  "log",
  "pallet-contracts",
  "pallet-dapps-staking",
- "pallet-evm",
+ "pallet-evm 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pallet-finality-tracker",
  "pallet-ovm",
  "pallet-plasm-lockdrop",
@@ -5114,8 +5204,8 @@ dependencies = [
 name = "plasm-rpc"
 version = "1.6.1"
 dependencies = [
- "frontier-rpc",
- "frontier-rpc-primitives",
+ "fc-rpc",
+ "fp-rpc",
  "jsonrpc-core 15.1.0",
  "jsonrpc-pubsub 15.1.0",
  "pallet-contracts-rpc",
@@ -5146,11 +5236,11 @@ dependencies = [
 name = "plasm-runtime"
 version = "1.6.1"
 dependencies = [
+ "fp-rpc",
  "frame-executive",
  "frame-support",
  "frame-system",
  "frame-system-rpc-runtime-api",
- "frontier-rpc-primitives",
  "hex-literal 0.2.1",
  "lazy_static",
  "pallet-authorship",
@@ -5161,8 +5251,8 @@ dependencies = [
  "pallet-contracts-primitives",
  "pallet-contracts-rpc-runtime-api",
  "pallet-dapps-staking",
- "pallet-ethereum 0.1.0",
- "pallet-evm",
+ "pallet-ethereum",
+ "pallet-evm 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pallet-finality-tracker",
  "pallet-grandpa",
  "pallet-indices",
@@ -8783,6 +8873,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "652931506d2c1244d7217a70b99f56718a7b4161b37f04e7cd868072a99f68cd"
 dependencies = [
  "hash-db",
+]
+
+[[package]]
+name = "triehash"
+version = "0.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f490aa7aa4e4d07edeba442c007e42e3e7f43aafb5112c5b047fff0b1aa5449c"
+dependencies = [
+ "hash-db",
+ "rlp",
 ]
 
 [[package]]

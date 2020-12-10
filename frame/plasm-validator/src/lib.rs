@@ -105,14 +105,10 @@ decl_module! {
                         }
                     };
 
-                    // TODO: distribute rewards to 5:1:4 = validator rewards : contract validators : operators
-                    let validator_rewards: u128 = rewards * 0.5; // for validator
-                    let contract_rewards: u128 = rewards * 0.1; // for layer 2
-                    let operator_rewards: u128 = rewards * 0.4; // for layer 2 operators
-                    let validator_rewarded = Self::reward_to_validators(&untreated_era, &validator_rewards);
+                    let (validator_rewarded, contract_rewarded, operator_rewarded) = Self::reward_network_participants(&untreated_era, &rewards);
 
                     // deposit event to total validator rewards
-                    Self::deposit_event(RawEvent::TotalValidatorRewards(untreated_era, validator_rewarded));
+                    Self::deposit_event(RawEvent::TotalRewards(untreated_era, validator_rewarded, contract_rewarded, operator_rewarded));
 
                     untreated_era+=1;
                 }
@@ -152,19 +148,36 @@ decl_event!(
         /// The amount of minted rewards for operators.
         OperatorReward(EraIndex, AccountId, Balance),
         /// The total amount of minted rewards for validators.
-        TotalValidatorRewards(EraIndex, Balance),
+        TotalRewards(EraIndex, Balance, Balance, Balance),
     }
 );
 
 impl<T: Trait> Module<T> {
-    pub fn reward_to_validators(era: &EraIndex, max_payout: &BalanceOf<T>) -> BalanceOf<T> {
-        if let Some(validators) = Self::elected_validators(era) {
-            let validators_len: u64 = validators.len() as u64;
+
+    pub fn reward_network_participants(untreated_era: &EraIndex, rewards: &BalanceOf<T>) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
+        let (validator_rewards, contract_rewards, operator_rewards) = Self::distribute_rewards(rewards);
+        let validator_rewarded = Self::pay_rewards(&validator_rewards, Self::elected_validators(untreated_era));
+        let contract_rewarded = Self::pay_rewards(&contract_rewards, Self::elected_contracts(untreated_era));
+        let operator_rewarded = Self::pay_rewards(&operator_rewards, Self::elected_operators(untreated_era));
+        (validator_rewarded, contract_rewarded, operator_rewarded)
+    }
+
+    fn distribute_rewards(rewards: &BalanceOf<T>) -> (BalanceOf<T>, BalanceOf<T>, BalanceOf<T>) {
+        let rewards_10 = *rewards / <BalanceOf<T>>::from(10); // divide it to 1/10
+        let validator_rewards = rewards_10*<BalanceOf<T>>::from(5); // for validator
+        let contract_rewards = rewards_10*<BalanceOf<T>>::from(1); // for layer 2
+        let operator_rewards = rewards_10*<BalanceOf<T>>::from(4); // for layer 2 operators
+        (validator_rewards, contract_rewards, operator_rewards)
+    }
+
+    fn pay_rewards(max_payout: &BalanceOf<T>, recipients: Option<Vec<T::AccountId>>) -> BalanceOf<T> {
+        if let Some(rewardees) = recipients {
+            let rewardees_len: u64 = rewardees.len() as u64;
             let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
-            for v in validators.iter() {
+            for r in rewardees.iter() {
                 let amount =
-                    Perbill::from_rational_approximation(1, validator_len) * max_payout.clone();
-                total_imbalance.subsume(Self::pay_reward(v, amount));
+                    Perbill::from_rational_approximation(1, rewardees_len) * max_payout.clone();
+                total_imbalance.subsume(Self::pay_reward(r, amount));
             }
             let total_payout = total_imbalance.peek();
 
@@ -183,47 +196,6 @@ impl<T: Trait> Module<T> {
             .unwrap_or(PositiveImbalanceOf::<T>::zero())
     }
 
-    pub fn reward_to_contracts(era: &EraIndex, max_payout: &BalanceOf<T>) -> BalanceOf<T> {
-        if let Some(contracts) = Self::elected_contracts(era) {
-            let contracts_len: u64 = contracts.len() as u64;
-            let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
-            for c in contracts.iter() {
-                let amount =
-                    Perbill::from_rational_approximation(1, contracts_len) * max_payout.clone();
-                total_imbalance.subsume(Self::pay_reward(c, amount));
-            }
-            let total_payout = total_imbalance.peek();
-
-            let rest = max_payout.saturating_sub(total_payout.clone());
-
-            T::Reward::on_unbalanced(total_imbalance);
-            T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
-            total_payout
-        } else {
-            BalanceOf::<T>::zero()
-        }
-    }
-
-    pub fn reward_to_operators() {
-        if let Some(operators) = Self::elected_operators(era) {
-            let operators_len: u64 = operators.len() as u64;
-            let mut total_imbalance = <PositiveImbalanceOf<T>>::zero();
-            for o in operators.iter() {
-                let amount =
-                    Perbill::from_rational_approximation(1, operators_len) * max_payout.clone();
-                total_imbalance.subsume(Self::reward_validator(o, amount));
-            }
-            let total_payout = total_imbalance.peek();
-
-            let rest = max_payout.saturating_sub(total_payout.clone());
-
-            T::Reward::on_unbalanced(total_imbalance);
-            T::RewardRemainder::on_unbalanced(T::Currency::issue(rest));
-            total_payout
-        } else {
-            BalanceOf::<T>::zero()
-        }
-    }
 }
 
 /// Returns the next validator candidate for calling by plasm-rewards when new era.

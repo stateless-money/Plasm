@@ -850,7 +850,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl frontier_rpc_primitives::EthereumRuntimeRPCApi<Block> for Runtime {
+    impl fp_rpc::EthereumRuntimeRPCApi<Block> for Runtime {
         fn chain_id() -> u64 {
             ChainId::get()
         }

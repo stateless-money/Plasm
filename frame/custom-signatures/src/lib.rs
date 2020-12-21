@@ -117,8 +117,8 @@ mod tests {
         parameter_types,
     };
     use hex_literal::hex;
-    use sp_core::{ecdsa, Pair};
     use sp_io::hashing::keccak_256;
+    use sp_core::{ecdsa, Pair, crypto::Ss58Codec};
     use sp_keyring::AccountKeyring as Keyring;
     use sp_runtime::{
         testing::{Header, H256},
@@ -274,5 +274,28 @@ mod tests {
             ));
             assert_eq!(System::account(alice).data.free, 1_000);
         })
+    }
+
+    #[test]
+    fn call_fixtures() {
+        let seed = hex!["7e9c7ad85df5cdc88659f53e06fb2eb9bab3ebc59083a3190eaf2c730332529c"];
+        let pair = ecdsa::Pair::from_seed(&seed);
+        assert_eq!(
+            MultiSigner::from(pair.public()).into_account().to_ss58check(),
+            "5Geeci7qCoYHyg9z2AwfpiT4CDryvxYyD7SAUdfNBz9CyDSb",
+        );
+
+        let dest = AccountId::from_ss58check("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY").unwrap();
+        let call: Call = pallet_balances::Call::<Runtime>::transfer(dest, 5_000).into();
+        assert_eq!(
+            call.encode(),
+            hex!["94040600d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d214e"],
+        );
+
+        let signature = hex!["54eb53c5636a9e4d04e90637e24bb8e38bf2eca020d97438a744eee8baa901c67fc20b9eb0ea6b431249b1d310c7587f424fe76de9a3d51a363f1d65f43616fb1c"];
+        assert_eq!(
+            pair.sign(&ethereum::signable_message(call.encode().as_ref())),
+            ecdsa::Signature::from_raw(signature),
+        )
     }
 }

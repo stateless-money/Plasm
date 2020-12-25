@@ -192,6 +192,7 @@ impl Trait for Test {
     type ComputeEraParam = u32;
     type ComputeEra = PlasmValidator;
     type Event = ();
+    type WeightInfo = ();
 }
 
 pub type System = frame_system::Module<Test>;

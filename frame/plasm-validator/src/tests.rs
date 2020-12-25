@@ -8,7 +8,7 @@ use frame_support::assert_ok;
 use pallet_plasm_rewards::traits::ComputeTotalPayout;
 use sp_runtime::DispatchError;
 use pallet_plasm_rewards::*;
-
+/*
 #[test]
 fn set_validators_works_for_root() {
     new_test_ext().execute_with(|| {
@@ -198,7 +198,7 @@ fn first_reward_to_validator_test() {
         );
     })
 }
-
+*/
 
 #[test]
 fn validate_works() {

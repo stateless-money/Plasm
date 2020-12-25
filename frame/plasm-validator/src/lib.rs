@@ -29,6 +29,8 @@ mod tests;
  
 mod compute_era;
 pub use compute_era::*;
+mod weights;
+pub use weights::WeightInfo;
 
 use codec::{HasCompact, Encode, Decode};
 
@@ -69,6 +71,9 @@ pub trait Trait: system::Trait {
  
    /// The overarching event type.
    type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+   /// Weight information for extrinsics in this pallet.
+   type WeightInfo: WeightInfo;
 }
  
 /// Preference of what happens regarding validation.
@@ -299,15 +304,14 @@ decl_module! {
            }
        }
  
-       #[weight = 50_000]
+       #[weight = T::WeightInfo::validate()]
        fn validate(origin, prefs: ValidatorPrefs) {
            // TODO: check era election status
            // ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
            let controller = ensure_signed(origin)?;
-           // TODO: apply controller/stash accounts
-           // let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-           // let stash = &ledger.stash;
-           //<Nominators<T>>::remove(stash);
+           let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+           let stash = &ledger.stash;
+           <Nominators<T>>::remove(stash);
            <Validators<T>>::insert(controller, prefs);
        }
  

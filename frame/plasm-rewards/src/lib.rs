@@ -31,7 +31,7 @@ use sp_std::{prelude::*, vec::Vec};
 
 pub mod inflation;
 #[cfg(test)]
-mod mock;
+pub mod mock;
 pub mod traits;
 pub use traits::*;
 #[cfg(test)]

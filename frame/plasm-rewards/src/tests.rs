@@ -238,11 +238,3 @@ fn force_new_era_always_incremental_era() {
     })
 }
 
-
-#[test]
-fn basic_setup_works() {
-    new_test_ext().execute_with(|| {
-        assert_eq!(PlasmRewards::current_era().unwrap(), 0);
-        assert_eq!(Session::current_index(), 0);
-    }) 
-}

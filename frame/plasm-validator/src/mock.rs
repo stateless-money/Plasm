@@ -48,7 +48,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut storage);
 
-    let validators = vec![VALIDATOR_A, VALIDATOR_B, VALIDATOR_C, VALIDATOR_D];
+    let validators_list = vec![VALIDATOR_A, VALIDATOR_B, VALIDATOR_C, VALIDATOR_D];
 
     let _ = pallet_plasm_rewards::GenesisConfig {
         ..Default::default()
@@ -56,12 +56,12 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     .assimilate_storage(&mut storage);
 
     let _ = GenesisConfig::<Test> {
-        validators: validators.clone(),
+        validators_list: validators_list.clone(),
     }
     .assimilate_storage(&mut storage);
 
     let _ = pallet_session::GenesisConfig::<Test> {
-        keys: validators
+        keys: validators_list
             .iter()
             .map(|x| (*x, *x, UintAuthorityId(*x)))
             .collect(),

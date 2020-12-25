@@ -7,6 +7,7 @@ use crate::mock::*;
 use frame_support::assert_ok;
 use pallet_plasm_rewards::traits::ComputeTotalPayout;
 use sp_runtime::DispatchError;
+use pallet_plasm_rewards::*;
 
 #[test]
 fn set_validators_works_for_root() {
@@ -23,7 +24,7 @@ fn set_validators_works_for_root() {
             vec![VALIDATOR_A, VALIDATOR_B, VALIDATOR_C]
         ));
         assert_eq!(
-            PlasmValidator::validators(),
+            PlasmValidator::validators_list(),
             vec![VALIDATOR_A, VALIDATOR_B, VALIDATOR_C]
         );
         for i in 1..10 {
@@ -54,7 +55,7 @@ fn set_validators_works_for_root() {
             Origin::root(),
             vec![VALIDATOR_A, VALIDATOR_B]
         ));
-        assert_eq!(PlasmValidator::validators(), vec![VALIDATOR_A, VALIDATOR_B]);
+        assert_eq!(PlasmValidator::validators_list(), vec![VALIDATOR_A, VALIDATOR_B]);
 
         for i in 25..30 {
             assert_eq!(Session::current_index(), i);
@@ -196,4 +197,19 @@ fn first_reward_to_validator_test() {
             5
         );
     })
+}
+
+
+#[test]
+fn validate_works() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(PlasmRewards::current_era().unwrap(), 0);
+        assert_eq!(Session::current_index(), 0);
+        let pref = ValidatorPrefs {
+            commission: Perbill::from_percent(10)
+        };
+        assert_ok!(PlasmValidator::validate(Origin::signed(1), pref.clone()));
+
+        assert_eq!(PlasmValidator::validators(1), pref);
+    }) 
 }

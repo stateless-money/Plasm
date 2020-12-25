@@ -6,8 +6,8 @@ use super::*;
 use crate::mock::*;
 use frame_support::assert_ok;
 use pallet_plasm_rewards::traits::ComputeTotalPayout;
-use sp_runtime::DispatchError;
 use pallet_plasm_rewards::*;
+use sp_runtime::DispatchError;
 /*
 #[test]
 fn set_validators_works_for_root() {
@@ -206,10 +206,10 @@ fn validate_works() {
         assert_eq!(PlasmRewards::current_era().unwrap(), 0);
         assert_eq!(Session::current_index(), 0);
         let pref = ValidatorPrefs {
-            commission: Perbill::from_percent(10)
+            commission: Perbill::from_percent(10),
         };
         assert_ok!(PlasmValidator::validate(Origin::signed(1), pref.clone()));
 
         assert_eq!(PlasmValidator::validators(1), pref);
-    }) 
+    })
 }

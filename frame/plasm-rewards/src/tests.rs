@@ -237,4 +237,3 @@ fn force_new_era_always_incremental_era() {
         }
     })
 }
-

@@ -57,6 +57,8 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
     let _ = GenesisConfig::<Test> {
         validators_list: validators_list.clone(),
+        minimum_validator_count: 0,
+        validator_count: 100
     }
     .assimilate_storage(&mut storage);
 
@@ -193,6 +195,7 @@ impl Trait for Test {
     type ComputeEra = PlasmValidator;
     type Event = ();
     type WeightInfo = ();
+	type CurrencyToVote = crate::traits::SaturatingCurrencyToVote;
 }
 
 pub type System = frame_system::Module<Test>;

@@ -4546,9 +4546,11 @@ dependencies = [
  "sp-arithmetic",
  "sp-core",
  "sp-io",
+ "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
  "sp-std",
+ "static_assertions",
 ]
 
 [[package]]

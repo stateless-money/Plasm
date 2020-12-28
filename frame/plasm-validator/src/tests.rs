@@ -205,11 +205,16 @@ fn validate_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(PlasmRewards::current_era().unwrap(), 0);
         assert_eq!(Session::current_index(), 0);
+        let validator = Origin::signed(0);
+        let stash = Origin::signed(1);
+        let controller = Origin::signed(2);
+        // Bond 100 milli DOT
+        assert_ok!(PlasmValidator::bond(validator, 2, 100000000000000, RewardDestination::Account(1)));
         let pref = ValidatorPrefs {
             commission: Perbill::from_percent(10),
         };
-        assert_ok!(PlasmValidator::validate(Origin::signed(1), pref.clone()));
+        assert_ok!(PlasmValidator::validate(controller, pref.clone()));
 
-        assert_eq!(PlasmValidator::validators(1), pref);
+        assert_eq!(PlasmValidator::validators(2), pref);
     })
 }

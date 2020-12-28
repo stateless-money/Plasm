@@ -2,24 +2,53 @@
 //!
 //! The Plasm staking module manages era, total amounts of rewards and how to distribute.
 #![cfg_attr(not(feature = "std"), no_std)]
+#[cfg(feature = "std")]
 
 use frame_support::{
-    decl_error, decl_event, decl_module, decl_storage,
-    traits::{Currency, Imbalance, LockableCurrency, OnUnbalanced, Time},
     StorageMap, StorageValue,
+	decl_module, decl_event, decl_storage, ensure, decl_error,
+	weights::{Weight, constants::{WEIGHT_PER_MICROS, WEIGHT_PER_NANOS}},
+    storage::IterableStorageMap,
+	dispatch::{
+		DispatchResult, DispatchResultWithPostInfo, DispatchErrorWithPostInfo,
+		WithPostDispatchInfo, IsSubType
+	},
+	traits::{
+		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
+        Time, EstimateNextNewSession, EnsureOrigin 
+    },
 };
+mod traits;
+use traits::CurrencyToVote;
 use frame_system::{
-    self as system, ensure, ensure_none, ensure_root, ensure_signed, offchain::SendTransactionTypes,
+    self as system, ensure_none, ensure_root, ensure_signed, offchain::SendTransactionTypes,
 };
 use pallet_plasm_rewards::{
     traits::{ComputeEraWithParam, EraFinder, ForSecurityEraRewardFinder, MaybeValidators},
     EraIndex,
 };
-use sp_runtime::{
-    traits::{AtLeast32BitUnsigned, Saturating, StaticLookup, Zero},
-    Perbill, RuntimeDebug,
+use sp_npos_elections::{
+    build_support_map, evaluate_support, generate_solution_type, is_score_better, seq_phragmen,
+    Assignment, ElectionResult as PrimitiveElectionResult, ElectionScore, ExtendedBalance,
+    SupportMap, VoteWeight, VotingLimit,
 };
-pub use sp_staking::SessionIndex;
+
+use sp_runtime::{
+    curve::PiecewiseLinear,
+    traits::{
+        AtLeast32BitUnsigned, CheckedSub, Convert, Dispatchable, SaturatedConversion, Saturating,
+        StaticLookup, Zero, UniqueSaturatedFrom, UniqueSaturatedInto
+    },
+    transaction_validity::{
+        InvalidTransaction, TransactionPriority, TransactionSource, TransactionValidity,
+        TransactionValidityError, ValidTransaction,
+    },
+    DispatchError, InnerOf, PerThing, PerU16, Perbill, Percent, RuntimeDebug,
+};
+use sp_staking::{
+    offence::{Offence, OffenceDetails, OffenceError, OnOffenceHandler, ReportOffence},
+    SessionIndex,
+};
 use sp_std::{prelude::*, vec::Vec};
 
 #[cfg(test)]
@@ -32,7 +61,55 @@ pub use compute_era::*;
 mod weights;
 pub use weights::WeightInfo;
 
+const STAKING_ID: LockIdentifier = *b"staking ";
+pub const MAX_UNLOCKING_CHUNKS: usize = 32;
+pub const MAX_NOMINATIONS: usize = <CompactAssignments as VotingLimit>::LIMIT;
+
+// Note: Maximum nomination limit is set here -- 16.
+generate_solution_type!(
+    #[compact]
+    pub struct CompactAssignments::<NominatorIndex, ValidatorIndex, OffchainAccuracy>(16)
+);
+
+/// Accuracy used for on-chain election.
+pub type ChainAccuracy = Perbill;
+
+/// Accuracy used for off-chain election. This better be small.
+pub type OffchainAccuracy = PerU16;
+
+pub(crate) const LOG_TARGET: &'static str = "staking";
+
+// syntactic sugar for logging.
+#[macro_export]
+macro_rules! log {
+	($level:tt, $patter:expr $(, $values:expr)* $(,)?) => {
+		frame_support::debug::$level!(
+			target: crate::LOG_TARGET,
+			$patter $(, $values)*
+		)
+	};
+}
+
+/// Data type used to index nominators in the compact type
+pub type NominatorIndex = u32;
+
+/// Data type used to index validators in the compact type.
+pub type ValidatorIndex = u16;
+
+// Ensure the size of both ValidatorIndex and NominatorIndex. They both need to be well below usize.
+static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<usize>());
+static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<usize>());
+static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<u32>());
+static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<u32>());
+
 use codec::{Decode, Encode, HasCompact};
+use sp_std::{
+    collections::btree_map::BTreeMap,
+    convert::{From, TryInto},
+    mem::size_of,
+    prelude::*,
+    result,
+};
 
 pub type BalanceOf<T> =
     <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
@@ -49,6 +126,13 @@ pub trait Trait: system::Trait {
 
     /// Time used for computing era duration.
     type Time: Time;
+
+    /// Convert a balance into a number used for election calculation. This must fit into a `u64`
+	/// but is allowed to be sensibly lossy. The `u64` is used to communicate with the
+	/// [`sp_npos_elections`] crate which accepts u64 numbers and does operations in 128.
+	/// Consequently, the backward convert is used convert the u128s from sp-elections back to a
+	/// [`BalanceOf`].
+	type CurrencyToVote: traits::CurrencyToVote<BalanceOf<Self>>;
 
     /// Tokens have been minted and are unused for validator-reward. Maybe, dapps-staking uses ().
     type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
@@ -73,6 +157,25 @@ pub trait Trait: system::Trait {
 
     /// Weight information for extrinsics in this pallet.
     type WeightInfo: WeightInfo;
+}
+
+/// A destination account for payment.
+#[derive(PartialEq, Eq, Copy, Clone, Encode, Decode, RuntimeDebug)]
+pub enum RewardDestination<AccountId> {
+	/// Pay into the stash account, increasing the amount at stake accordingly.
+	Staked,
+	/// Pay into the stash account, not increasing the amount at stake.
+	Stash,
+	/// Pay into the controller account.
+	Controller,
+	/// Pay into a specified account.
+	Account(AccountId),
+}
+
+impl<AccountId> Default for RewardDestination<AccountId> {
+	fn default() -> Self {
+		RewardDestination::Staked
+	}
 }
 
 /// Preference of what happens regarding validation.
@@ -247,31 +350,78 @@ pub struct Nominations<AccountId> {
     pub suppressed: bool,
 }
 
+/// The status of the upcoming (offchain) election.
+#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug)]
+pub enum ElectionStatus<BlockNumber> {
+    /// Nothing has and will happen for now. submission window is not open.
+    Closed,
+    /// The submission window has been open since the contained block number.
+    Open(BlockNumber),
+}
+
+impl<BlockNumber: PartialEq> ElectionStatus<BlockNumber> {
+    pub fn is_open_at(&self, n: BlockNumber) -> bool {
+        *self == Self::Open(n)
+    }
+
+    pub fn is_closed(&self) -> bool {
+        match self {
+            Self::Closed => true,
+            _ => false,
+        }
+    }
+
+    pub fn is_open(&self) -> bool {
+        !self.is_closed()
+    }
+}
+
+impl<BlockNumber> Default for ElectionStatus<BlockNumber> {
+    fn default() -> Self {
+        Self::Closed
+    }
+}
+
 decl_storage! {
    trait Store for Module<T: Trait> as DappsStaking {
-       /// The already untreated era is EraIndex.
-       pub UntreatedEra get(fn untreated_era): EraIndex;
+        /// The already untreated era is EraIndex.
+        pub UntreatedEra get(fn untreated_era): EraIndex;
 
+        /// The ideal number of staking participants.
+	    pub ValidatorCount get(fn validator_count) config(): u32;
 
-       /// Map from all (unlocked) "controller" accounts to the info regarding the staking.
-       pub Ledger get(fn ledger):
-       map hasher(blake2_128_concat) T::AccountId
-       => Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
+	    /// Minimum number of staking participants before emergency conditions are imposed.
+	    pub MinimumValidatorCount get(fn minimum_validator_count) config(): u32;
 
-       /// The currently elected validator set keyed by stash account ID.
-       pub ElectedValidators get(fn elected_validators):
-           map hasher(twox_64_concat) EraIndex => Option<Vec<T::AccountId>>;
+        /// Map from all locked "stash" accounts to the controller account.
+        pub Bonded get(fn bonded): map hasher(twox_64_concat) T::AccountId => Option<T::AccountId>;
 
-       /// The map from (wannabe) validator stash key to the preferences of that validator.
-       pub Validators get(fn validators):
-       map hasher(twox_64_concat) T::AccountId => ValidatorPrefs;
+        /// Map from all (unlocked) "controller" accounts to the info regarding the staking.
+        pub Ledger get(fn ledger):
+        map hasher(blake2_128_concat) T::AccountId
+        => Option<StakingLedger<T::AccountId, BalanceOf<T>>>;
 
-       /// The map from nominator stash key to the set of stash keys of all validators to nominate.
-       pub Nominators get(fn nominators):
-       map hasher(twox_64_concat) T::AccountId => Option<Nominations<T::AccountId>>;
+        /// Where the reward payment should be made. Keyed by stash.
+	    pub Payee get(fn payee): map hasher(twox_64_concat) T::AccountId => RewardDestination<T::AccountId>;
 
-       /// Set of next era accounts that can validate blocks.
-       pub ValidatorsList get(fn validators_list) config(): Vec<T::AccountId>;
+        /// The currently elected validator set keyed by stash account ID.
+        pub ElectedValidators get(fn elected_validators):
+            map hasher(twox_64_concat) EraIndex => Option<Vec<T::AccountId>>;
+
+        /// The map from (wannabe) validator stash key to the preferences of that validator.
+        pub Validators get(fn validators):
+        map hasher(twox_64_concat) T::AccountId => ValidatorPrefs;
+
+        /// The map from nominator stash key to the set of stash keys of all validators to nominate.
+        pub Nominators get(fn nominators):
+        map hasher(twox_64_concat) T::AccountId => Option<Nominations<T::AccountId>>;
+
+        /// Set of next era accounts that can validate blocks.
+        pub ValidatorsList get(fn validators_list) config(): Vec<T::AccountId>;
+
+        /// Flag to control the execution of the offchain election. When `Open(_)`, we accept
+        /// solutions to be submitted.
+        pub EraElectionStatus get(fn era_election_status): ElectionStatus<T::BlockNumber>;
    }
 }
 
@@ -302,7 +452,76 @@ decl_module! {
            }
        }
 
-         /// Declare the desire to validate for the origin controller.
+        /// Take the origin account as a stash and lock up `value` of its balance. `controller` will
+		/// be the account that controls it.
+		///
+		/// `value` must be more than the `minimum_balance` specified by `T::Currency`.
+		///
+		/// The dispatch origin for this call must be _Signed_ by the stash account.
+		///
+		/// Emits `Bonded`.
+		///
+		/// # <weight>
+		/// - Independent of the arguments. Moderate complexity.
+		/// - O(1).
+		/// - Three extra DB entries.
+		///
+		/// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
+		/// unless the `origin` falls below _existential deposit_ and gets removed as dust.
+		/// ------------------
+		/// Weight: O(1)
+		/// DB Weight:
+		/// - Read: Bonded, Ledger, [Origin Account], Current Era, History Depth, Locks
+		/// - Write: Bonded, Payee, [Origin Account], Locks, Ledger
+		/// # </weight>
+		#[weight = T::WeightInfo::bond()]
+		pub fn bond(origin,
+			controller: <T::Lookup as StaticLookup>::Source,
+			#[compact] value: BalanceOf<T>,
+			payee: RewardDestination<T::AccountId>,
+		) {
+			let stash = ensure_signed(origin)?;
+
+			if <Bonded<T>>::contains_key(&stash) {
+				Err(Error::<T>::AlreadyBonded)?
+			}
+
+			let controller = T::Lookup::lookup(controller)?;
+
+			if <Ledger<T>>::contains_key(&controller) {
+				Err(Error::<T>::AlreadyPaired)?
+			}
+
+			// reject a bond which is considered to be _dust_.
+			if value < T::Currency::minimum_balance() {
+				Err(Error::<T>::InsufficientValue)?
+			}
+
+			// You're auto-bonded forever, here. We might improve this by only bonding when
+			// you actually validate/nominate and remove once you unbond __everything__.
+			<Bonded<T>>::insert(&stash, &controller);
+			<Payee<T>>::insert(&stash, payee);
+
+			system::Module::<T>::inc_ref(&stash);
+
+			let current_era = Self::current_era().unwrap_or(0);
+			let history_depth = Self::history_depth();
+			let last_reward_era = current_era.saturating_sub(history_depth);
+
+			let stash_balance = T::Currency::free_balance(&stash);
+			let value = value.min(stash_balance);
+			Self::deposit_event(RawEvent::Bonded(stash.clone(), value));
+			let item = StakingLedger {
+				stash,
+				total: value,
+				active: value,
+				unlocking: vec![],
+				claimed_rewards: (last_reward_era..current_era).collect(),
+			};
+			Self::update_ledger(&controller, &item);
+        }
+        
+        /// Declare the desire to validate for the origin controller.
         ///
         /// Effects will be felt at the beginning of the next era.
         ///
@@ -319,16 +538,15 @@ decl_module! {
         /// - Read: Era Election Status, Ledger
         /// - Write: Nominators, Validators
         /// # </weight>
-       #[weight = T::WeightInfo::validate()]
-       fn validate(origin, prefs: ValidatorPrefs) {
-           // TODO: check era election status
-           // ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
-           let controller = ensure_signed(origin)?;
-           let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-           let stash = &ledger.stash;
-           <Nominators<T>>::remove(stash);
-           <Validators<T>>::insert(controller, prefs);
-       }
+        #[weight = T::WeightInfo::validate()]
+        fn validate(origin, prefs: ValidatorPrefs) {
+            ensure!(Self::era_election_status().is_closed(), Error::<T>::CallNotAllowed);
+            let controller = ensure_signed(origin)?;
+            let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+            let stash = &ledger.stash;
+            <Nominators<T>>::remove(stash);
+            <Validators<T>>::insert(controller, prefs);
+        }
 
         /// Declare the desire to nominate `targets` for the origin controller.
         ///
@@ -372,26 +590,59 @@ decl_module! {
             <Nominators<T>>::insert(stash, &nominations);
         }
 
+        /// (Re-)set the controller of a stash.
+        ///
+        /// Effects will be felt at the beginning of the next era.
+        ///
+        /// The dispatch origin for this call must be _Signed_ by the stash, not the controller.
+        ///
+        /// # <weight>
+        /// - Independent of the arguments. Insignificant complexity.
+        /// - Contains a limited number of reads.
+        /// - Writes are limited to the `origin` account key.
+        /// ----------
+        /// Weight: O(1)
+        /// DB Weight:
+        /// - Read: Bonded, Ledger New Controller, Ledger Old Controller
+        /// - Write: Bonded, Ledger New Controller, Ledger Old Controller
+        /// # </weight>
+        #[weight = T::WeightInfo::set_controller()]
+        fn set_controller(origin, controller: <T::Lookup as StaticLookup>::Source) {
+            let stash = ensure_signed(origin)?;
+            let old_controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
+            let controller = T::Lookup::lookup(controller)?;
+            if <Ledger<T>>::contains_key(&controller) {
+                Err(Error::<T>::AlreadyPaired)?
+            }
+            if controller != old_controller {
+                <Bonded<T>>::insert(&stash, &controller);
+                if let Some(l) = <Ledger<T>>::take(&old_controller) {
+                    <Ledger<T>>::insert(&controller, l);
+                }
+            }
+        }
 
-       // ----- Root calls.
-       /// Manually set new validators.
-       ///
-       /// # <weight>
-       /// - One storage write
-       /// # </weight>
-       /// TODO: weight
-       #[weight = 50_000]
-       fn set_validators(origin, new_validators: Vec<T::AccountId>) {
-           ensure_root(origin)?;
-           let pref = ValidatorPrefs {
-               commission: Perbill::from_percent(100)
-           };
-           for i in new_validators.clone() {
-               <Validators<T>>::insert(i, pref.clone());
-           }
-           Self::deposit_event(RawEvent::NewValidators(new_validators));
-       }
-   }
+
+
+        // ----- Root calls.
+        /// Manually set new validators.
+        ///
+        /// # <weight>
+        /// - One storage write
+        /// # </weight>
+        /// TODO: weight
+        #[weight = 50_000]
+        fn set_validators(origin, new_validators: Vec<T::AccountId>) {
+            ensure_root(origin)?;
+            let pref = ValidatorPrefs {
+                commission: Perbill::from_percent(100)
+            };
+            for i in new_validators.clone() {
+                <Validators<T>>::insert(i, pref.clone());
+            }
+            Self::deposit_event(RawEvent::NewValidators(new_validators));
+        }
+    }
 }
 
 decl_event!(
@@ -400,6 +651,11 @@ decl_event!(
         AccountId = <T as system::Trait>::AccountId,
         Balance = BalanceOf<T>,
     {
+        /// An account has bonded this amount. \[stash, amount\]
+		///
+		/// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
+		/// it will not be emitted for staking rewards when they are added to stake.
+		Bonded(AccountId, Balance),
         /// Validator set changed.
         NewValidators(Vec<AccountId>),
         /// The amount of minted rewards for validators.
@@ -413,8 +669,18 @@ decl_error! {
     pub enum Error for Module<T: Trait> {
         /// Not a controller account.
         NotController,
+        /// Not a stash account.
+        NotStash,
+        /// Stash is already bonded.
+		AlreadyBonded,
+        /// Controller is already paired.
+		AlreadyPaired,
         /// The call is not allowed at the given time due to restrictions of election period.
         CallNotAllowed,
+        /// Targets cannot be empty.
+        EmptyTargets,
+        /// Can not bond with value less than minimum balance.
+		InsufficientValue,
     }
 }
 
@@ -444,6 +710,38 @@ impl<T: Trait> Module<T> {
         T::Currency::deposit_into_existing(&stash, reward)
             .unwrap_or(PositiveImbalanceOf::<T>::zero())
     }
+
+    fn current_era() -> Option<EraIndex> {
+        pallet_plasm_rewards::CurrentEra::get()
+    }
+
+    fn history_depth() -> u32 {
+        pallet_plasm_rewards::HistoryDepth::get()
+    }
+
+    /// Update the ledger for a controller.
+	///
+    /// 
+	/// This will also update the stash lock.
+	fn update_ledger(
+		controller: &T::AccountId,
+		ledger: &StakingLedger<T::AccountId, BalanceOf<T>>
+	) {
+		T::Currency::set_lock(
+			STAKING_ID,
+			&ledger.stash,
+			ledger.total,
+			WithdrawReasons::all(),
+		);
+		<Ledger<T>>::insert(controller, ledger);
+	}
+
+	/// Chill a stash account.
+	fn chill_stash(stash: &T::AccountId) {
+		<Validators<T>>::remove(stash);
+		<Nominators<T>>::remove(stash);
+	}
+
 }
 
 /// Returns the next validator candidate for calling by plasm-rewards when new era.

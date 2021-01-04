@@ -8,6 +8,7 @@ use frame_support::assert_ok;
 use pallet_plasm_rewards::traits::ComputeTotalPayout;
 use pallet_plasm_rewards::*;
 use sp_runtime::DispatchError;
+use pallet_balances::*;
 /*
 #[test]
 fn set_validators_works_for_root() {
@@ -205,16 +206,65 @@ fn validate_works() {
     new_test_ext().execute_with(|| {
         assert_eq!(PlasmRewards::current_era().unwrap(), 0);
         assert_eq!(Session::current_index(), 0);
-        let validator = Origin::signed(0);
-        let stash = Origin::signed(1);
-        let controller = Origin::signed(2);
-        // Bond 100 milli DOT
-        assert_ok!(PlasmValidator::bond(validator, 2, 100000000000000, RewardDestination::Account(1)));
+        let validator = Origin::signed(1);
+        let stash = Origin::signed(2);
+        assert_eq!(Balances::free_balance(1), 1000000000000000000); 
+        assert_eq!(Balances::free_balance(2), 1000000000000000000);
+        assert_eq!(Balances::free_balance(3), 1000000000000000000);
+        // from validator account lock up 1 milli PLM to pay rewards to stash account with set controller account as itself.
+        assert_ok!(PlasmValidator::bond(validator.clone(), 1, 100_000_000_000_000, RewardDestination::Account(2)));
         let pref = ValidatorPrefs {
             commission: Perbill::from_percent(10),
         };
-        assert_ok!(PlasmValidator::validate(controller, pref.clone()));
 
-        assert_eq!(PlasmValidator::validators(2), pref);
+        // validate in plasm network with commission of 10 percent with controller account
+        assert_ok!(PlasmValidator::validate(validator, pref.clone()));
+
+        // check whether the controller account keeps the preferences
+        assert_eq!(PlasmValidator::validators(1), pref);
+
+        // move to new era
+        advance_session();
+            
+        
     })
+}
+
+#[test]
+fn nominate_works() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(PlasmRewards::current_era().unwrap(), 0);
+        assert_eq!(Session::current_index(), 0);
+        let validator = Origin::signed(1);
+        let stash = Origin::signed(2);
+        let nominator = Origin::signed(3);
+        let nominator_stash = Origin::signed(5);
+        
+        assert_eq!(Balances::free_balance(1), 1000000000000000000); 
+        assert_eq!(Balances::free_balance(2), 1000000000000000000);
+        assert_eq!(Balances::free_balance(3), 1000000000000000000);
+        assert_eq!(Balances::free_balance(4), 1000000000000000000);
+        
+
+        // from validator account as stash account and lock up 100 milli PLM 
+        assert_ok!(PlasmValidator::bond(validator.clone(), 1, 100000000000000, RewardDestination::Account(2)));
+        let pref = ValidatorPrefs {
+            commission: Perbill::from_percent(10),
+        };
+
+        assert_ok!(PlasmValidator::validate(validator, pref.clone()));
+
+        assert_eq!(PlasmValidator::validators(1), pref);
+
+
+        // from nominator account lock up 1 milli PLM to pay rewards to stash account with set controller account as itself.
+        assert_ok!(PlasmValidator::bond(nominator.clone(), 3, 100_000_000_000_000, RewardDestination::Account(5)));
+        
+        
+        assert_ok!(PlasmValidator::nominate(nominator, vec![1u64]));
+
+        assert_eq!(PlasmValidator::nominators(3).unwrap().targets, [1]);
+        assert_eq!(PlasmValidator::nominators(3).unwrap().submitted_in, 0);
+        assert_eq!(PlasmValidator::nominators(3).unwrap().suppressed, false);
+    }) 
 }

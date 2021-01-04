@@ -272,6 +272,8 @@ impl pallet_plasm_validator::Trait for Runtime {
     type ComputeEraParam = u32;
     type ComputeEra = PlasmValidator;
     type Event = Event;
+    type CurrencyToVote = pallet_plasm_validator::traits::SaturatingCurrencyToVote;
+    type WeightInfo = pallet_plasm_validator::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_dapps_staking::Trait for Runtime {

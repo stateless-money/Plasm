@@ -2,7 +2,6 @@
 //!
 //! The Plasm staking module manages era, total amounts of rewards and how to distribute.
 #![cfg_attr(not(feature = "std"), no_std)]
-#[cfg(feature = "std")]
 
 use frame_support::{
     StorageMap, StorageValue,
@@ -18,7 +17,7 @@ use frame_support::{
         Time, EstimateNextNewSession, EnsureOrigin 
     },
 };
-mod traits;
+pub mod traits;
 use traits::CurrencyToVote;
 use frame_system::{
     self as system, ensure_none, ensure_root, ensure_signed, offchain::SendTransactionTypes,
@@ -56,10 +55,18 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+use sp_std::{
+	result,
+	prelude::*,
+	collections::btree_map::BTreeMap,
+	convert::{TryInto, From},
+	mem::size_of,
+};
+
 mod compute_era;
 pub use compute_era::*;
-mod weights;
-pub use weights::WeightInfo;
+pub mod weights;
+use weights::WeightInfo;
 
 const STAKING_ID: LockIdentifier = *b"staking ";
 pub const MAX_UNLOCKING_CHUNKS: usize = 32;
@@ -103,13 +110,6 @@ static_assertions::const_assert!(size_of::<ValidatorIndex>() <= size_of::<u32>()
 static_assertions::const_assert!(size_of::<NominatorIndex>() <= size_of::<u32>());
 
 use codec::{Decode, Encode, HasCompact};
-use sp_std::{
-    collections::btree_map::BTreeMap,
-    convert::{From, TryInto},
-    mem::size_of,
-    prelude::*,
-    result,
-};
 
 pub type BalanceOf<T> =
     <<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;

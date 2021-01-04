@@ -40,7 +40,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
 
     let _ = pallet_balances::GenesisConfig::<Test> {
         balances: vec![
-            (VALIDATOR_A, 1_000_000_000_000_000_000),
+            (VALIDATOR_A, 1_000_000_000_000_000_000), // 1 PLM
             (VALIDATOR_B, 1_000_000_000_000_000_000),
             (VALIDATOR_C, 1_000_000_000_000_000_000),
             (VALIDATOR_D, 1_000_000_000_000_000_000),
@@ -58,7 +58,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     let _ = GenesisConfig::<Test> {
         validators_list: validators_list.clone(),
         minimum_validator_count: 0,
-        validator_count: 100
+        validator_count: 300
     }
     .assimilate_storage(&mut storage);
 

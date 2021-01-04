@@ -134,7 +134,9 @@ fn make_genesis(
             ..Default::default()
         }),
         pallet_plasm_validator: Some(PlasmValidatorConfig {
-            validators: initial_authorities,
+            validators_list: initial_authorities,
+            minimum_validator_count: 0, // TODO: change this number with the number of initial authorities
+            validator_count: 300
         }),
         pallet_plasm_lockdrop: Some(PlasmLockdropConfig {
             // Alpha2: 0.44698108660714747

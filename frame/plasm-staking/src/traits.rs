@@ -67,7 +67,7 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 		B::unique_saturated_from(value)
 	}
 }
-
+/*
 /// Something that can be checked to be a of sub type `T`.
 ///
 /// This is useful for enums where each variant encapsulates a different sub type, and
@@ -79,7 +79,7 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 /// # Example
 ///
 /// ```
-/// # use frame_support::traits::IsSubType;
+/// // use frame_support::traits::IsSubType;
 ///
 /// enum Test {
 ///     String(String),
@@ -110,6 +110,7 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 ///     assert_eq!("test", IsSubType::<String>::is_sub_type(&data).unwrap().as_str());
 /// }
 /// ```
+*/
 pub trait IsSubType<T> {
 	/// Returns `Some(_)` if `self` is an instance of sub type `T`.
 	fn is_sub_type(&self) -> Option<&T>;

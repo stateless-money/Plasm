@@ -133,7 +133,7 @@ fn make_genesis(
         pallet_plasm_rewards: Some(PlasmRewardsConfig {
             ..Default::default()
         }),
-        pallet_plasm_validator: Some(PlasmValidatorConfig {
+        pallet_plasm_staking: Some(PlasmValidatorConfig {
             validators_list: initial_authorities,
             minimum_validator_count: 0, // TODO: change this number with the number of initial authorities
             validator_count: 300

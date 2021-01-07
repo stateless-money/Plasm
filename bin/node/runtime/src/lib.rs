@@ -262,7 +262,7 @@ impl pallet_plasm_rewards::Trait for Runtime {
     type Event = Event;
 }
 
-impl pallet_plasm_validator::Trait for Runtime {
+impl pallet_plasm_staking::Trait for Runtime {
     type Currency = Balances;
     type Time = Timestamp;
     type RewardRemainder = (); // Reward remainder is burned.
@@ -272,8 +272,8 @@ impl pallet_plasm_validator::Trait for Runtime {
     type ComputeEraParam = u32;
     type ComputeEra = PlasmValidator;
     type Event = Event;
-    type CurrencyToVote = pallet_plasm_validator::traits::SaturatingCurrencyToVote;
-    type WeightInfo = pallet_plasm_validator::weights::SubstrateWeight<Runtime>;
+    type CurrencyToVote = pallet_plasm_staking::traits::SaturatingCurrencyToVote;
+    type WeightInfo = pallet_plasm_staking::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_dapps_staking::Trait for Runtime {
@@ -604,7 +604,7 @@ construct_runtime!(
         Contracts: pallet_contracts::{Module, Call, Storage, Event<T>, Config},
         DappsStaking: pallet_dapps_staking::{Module, Call, Storage, Event<T>},
         PlasmLockdrop: pallet_plasm_lockdrop::{Module, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
-        PlasmValidator: pallet_plasm_validator::{Module, Call, Storage, Event<T>, Config<T>},
+        PlasmValidator: pallet_plasm_staking::{Module, Call, Storage, Event<T>, Config<T>},
         PlasmRewards: pallet_plasm_rewards::{Module, Call, Storage, Event<T>, Config},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
         Historical: pallet_session_historical::{Module},

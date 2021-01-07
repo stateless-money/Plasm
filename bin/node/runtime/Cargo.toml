@@ -33,7 +33,7 @@ pallet-contract-operator = { path = "../../../frame/operator", default-features 
 pallet-operator-trading = { path = "../../../frame/trading", default-features = false }
 pallet-dapps-staking = { path = "../../../frame/dapps-staking", default-features = false }
 pallet-plasm-rewards = { path = "../../../frame/plasm-rewards", default-features = false }
-pallet-plasm-validator = { path = "../../../frame/plasm-validator", default-features = false }
+pallet-plasm-staking = { path = "../../../frame/plasm-staking", default-features = false }
 pallet-plasm-lockdrop = { path = "../../../frame/plasm-lockdrop", default-features = false }
 pallet-ovm = { path = "../../../frame/ovm", default-features = false }
 pallet-plasma = { path = "../../../frame/plasma", default-features = false }
@@ -103,7 +103,7 @@ std = [
     "pallet-nicks/std",
     "sp-offchain/std",
     "pallet-plasm-rewards/std",
-    "pallet-plasm-validator/std",
+    "pallet-plasm-staking/std",
     "pallet-plasm-lockdrop/std",
     "pallet-plasma/std",
     "pallet-randomness-collective-flip/std",

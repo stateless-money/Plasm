@@ -29,7 +29,7 @@ impl_outer_dispatch! {
         pallet_session::Session,
         pallet_balances::Balances,
         plasm_rewards::PlasmRewards,
-        plasm_validator::PlasmValidator,
+        plasm_validator::PlasmStaking,
     }
 }
 
@@ -177,10 +177,10 @@ impl pallet_plasm_rewards::Trait for Test {
     type Time = Timestamp;
     type SessionsPerEra = SessionsPerEra;
     type BondingDuration = BondingDuration;
-    type ComputeEraForDapps = PlasmValidator;
-    type ComputeEraForSecurity = PlasmValidator;
+    type ComputeEraForDapps = PlasmStaking;
+    type ComputeEraForSecurity = PlasmStaking;
     type ComputeTotalPayout = SimpleComputeTotalPayout;
-    type MaybeValidators = PlasmValidator;
+    type MaybeValidators = PlasmStaking;
     type Event = ();
 }
 
@@ -188,14 +188,22 @@ impl Trait for Test {
     type Currency = Balances;
     type Time = Timestamp;
     type RewardRemainder = (); // Reward remainder is burned.
+    type Slash = ();
     type Reward = (); // Reward is minted.
     type EraFinder = PlasmRewards;
     type ForSecurityEraReward = PlasmRewards;
     type ComputeEraParam = u32;
-    type ComputeEra = PlasmValidator;
+    type ComputeEra = PlasmStaking;
     type Event = ();
+    type BondingDuration = ();
+    type SessionInterface = Self;
     type WeightInfo = ();
 	type CurrencyToVote = crate::traits::SaturatingCurrencyToVote;
+}
+
+impl pallet_session::historical::Trait for Test {
+	type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 
 pub type System = frame_system::Module<Test>;
@@ -203,7 +211,7 @@ pub type Session = pallet_session::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
 pub type PlasmRewards = pallet_plasm_rewards::Module<Test>;
-pub type PlasmValidator = Module<Test>;
+pub type PlasmStaking = Module<Test>;
 
 pub const PER_SESSION: u64 = 60 * 1000;
 

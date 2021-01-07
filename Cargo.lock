@@ -4530,7 +4530,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-plasm-validator"
+name = "pallet-plasm-staking"
 version = "1.6.0"
 dependencies = [
  "frame-support",
@@ -5231,7 +5231,7 @@ dependencies = [
  "pallet-ovm",
  "pallet-plasm-lockdrop",
  "pallet-plasm-rewards",
- "pallet-plasm-validator",
+ "pallet-plasm-staking",
  "pallet-plasma",
  "pallet-randomness-collective-flip",
  "pallet-session",

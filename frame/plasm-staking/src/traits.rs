@@ -14,11 +14,11 @@ use super::*;
 /// that its values can affect the outcome. This implies that if the vote value is dependent on the
 /// total issuance, it should never ber written to storage for later re-use.
 pub trait CurrencyToVote<B> {
-	/// Convert balance to u64.
-	fn to_vote(value: B, issuance: B) -> u64;
+    /// Convert balance to u64.
+    fn to_vote(value: B, issuance: B) -> u64;
 
-	/// Convert u128 to balance.
-	fn to_currency(value: u128, issuance: B) -> B;
+    /// Convert u128 to balance.
+    fn to_currency(value: u128, issuance: B) -> B;
 }
 
 /// An implementation of `CurrencyToVote` tailored for chain's that have a balance type of u128.
@@ -35,21 +35,20 @@ pub trait CurrencyToVote<B> {
 pub struct U128CurrencyToVote;
 
 impl U128CurrencyToVote {
-	fn factor(issuance: u128) -> u128 {
-		(issuance / u64::max_value() as u128).max(1)
-	}
+    fn factor(issuance: u128) -> u128 {
+        (issuance / u64::max_value() as u128).max(1)
+    }
 }
 
 impl CurrencyToVote<u128> for U128CurrencyToVote {
-	fn to_vote(value: u128, issuance: u128) -> u64 {
-		(value / Self::factor(issuance)).saturated_into()
-	}
+    fn to_vote(value: u128, issuance: u128) -> u64 {
+        (value / Self::factor(issuance)).saturated_into()
+    }
 
-	fn to_currency(value: u128, issuance: u128) -> u128 {
-		value.saturating_mul(Self::factor(issuance))
-	}
+    fn to_currency(value: u128, issuance: u128) -> u128 {
+        value.saturating_mul(Self::factor(issuance))
+    }
 }
-
 
 /// A naive implementation of `CurrencyConvert` that simply saturates all conversions.
 ///
@@ -58,14 +57,16 @@ impl CurrencyToVote<u128> for U128CurrencyToVote {
 /// This is designed to be used mostly for testing. Use with care, and think about the consequences.
 pub struct SaturatingCurrencyToVote;
 
-impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> for SaturatingCurrencyToVote {
-	fn to_vote(value: B, _: B) -> u64 {
-		value.unique_saturated_into()
-	}
+impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B>
+    for SaturatingCurrencyToVote
+{
+    fn to_vote(value: B, _: B) -> u64 {
+        value.unique_saturated_into()
+    }
 
-	fn to_currency(value: u128, _: B) -> B {
-		B::unique_saturated_from(value)
-	}
+    fn to_currency(value: u128, _: B) -> B {
+        B::unique_saturated_from(value)
+    }
 }
 /*
 /// Something that can be checked to be a of sub type `T`.
@@ -112,6 +113,6 @@ impl<B: UniqueSaturatedInto<u64> + UniqueSaturatedFrom<u128>> CurrencyToVote<B> 
 /// ```
 */
 pub trait IsSubType<T> {
-	/// Returns `Some(_)` if `self` is an instance of sub type `T`.
-	fn is_sub_type(&self) -> Option<&T>;
+    /// Returns `Some(_)` if `self` is an instance of sub type `T`.
+    fn is_sub_type(&self) -> Option<&T>;
 }

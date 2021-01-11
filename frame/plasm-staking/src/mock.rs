@@ -58,7 +58,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
     let _ = GenesisConfig::<Test> {
         validators_list: validators_list.clone(),
         minimum_validator_count: 0,
-        validator_count: 300
+        validator_count: 300,
     }
     .assimilate_storage(&mut storage);
 
@@ -198,12 +198,12 @@ impl Trait for Test {
     type BondingDuration = ();
     type SessionInterface = Self;
     type WeightInfo = ();
-	type CurrencyToVote = crate::traits::SaturatingCurrencyToVote;
+    type CurrencyToVote = crate::traits::SaturatingCurrencyToVote;
 }
 
 impl pallet_session::historical::Trait for Test {
-	type FullIdentification = crate::Exposure<AccountId, Balance>;
-	type FullIdentificationOf = crate::ExposureOf<Test>;
+    type FullIdentification = crate::Exposure<AccountId, Balance>;
+    type FullIdentificationOf = crate::ExposureOf<Test>;
 }
 
 pub type System = frame_system::Module<Test>;

@@ -1831,6 +1831,7 @@ impl<T: Trait> Module<T> {
 			let era_duration = now_as_millis_u64 - active_era_start;
 			let max_payout = match T::ForSecurityEraReward::get(&untreated_era) {
 				Some(reward) => {
+					// TODO: add storage for number of block creators in the era
 					let validator_len = T::SessionInterface::validators().len();
 					Perbill::from_rational_approximation(1, validator_len) * reward
 				},

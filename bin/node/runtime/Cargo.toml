@@ -32,7 +32,6 @@ sp-session = { version = "2.0.0", default-features = false }
 pallet-contract-operator = { path = "../../../frame/operator", default-features = false }
 pallet-operator-trading = { path = "../../../frame/trading", default-features = false }
 pallet-dapps-staking = { path = "../../../frame/dapps-staking", default-features = false }
-pallet-plasm-rewards = { path = "../../../frame/plasm-rewards", default-features = false }
 pallet-plasm-staking = { path = "../../../frame/plasm-staking", default-features = false }
 pallet-plasm-lockdrop = { path = "../../../frame/plasm-lockdrop", default-features = false }
 pallet-ovm = { path = "../../../frame/ovm", default-features = false }
@@ -102,7 +101,6 @@ std = [
     "pallet-indices/std",
     "pallet-nicks/std",
     "sp-offchain/std",
-    "pallet-plasm-rewards/std",
     "pallet-plasm-staking/std",
     "pallet-plasm-lockdrop/std",
     "pallet-plasma/std",

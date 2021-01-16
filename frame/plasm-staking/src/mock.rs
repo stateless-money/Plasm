@@ -2,23 +2,80 @@
 
 #![cfg(test)]
 
-use super::*;
-use frame_support::{impl_outer_dispatch, impl_outer_origin, parameter_types, traits::OnFinalize};
-use pallet_plasm_rewards::inflation::SimpleComputeTotalPayout;
+use crate::*;
+use frame_support::{
+	assert_ok, impl_outer_dispatch, impl_outer_event, impl_outer_origin, parameter_types,
+	traits::{Currency, FindAuthor, Get, OnFinalize, OnInitialize},
+	weights::{constants::RocksDbWeight, Weight},
+	IterableStorageMap, StorageDoubleMap, StorageMap, StorageValue,
+};
 use sp_core::{crypto::key_types, H256};
-use sp_runtime::testing::{Header, UintAuthorityId};
-use sp_runtime::traits::{BlakeTwo256, ConvertInto, IdentityLookup, OpaqueKeys};
+use sp_io;
+use sp_npos_elections::{
+	build_support_map, evaluate_support, reduce, ExtendedBalance, StakedAssignment, ElectionScore,
+};
+use sp_runtime::{
+	curve::PiecewiseLinear,
+	testing::{Header, TestXt, UintAuthorityId},
+	traits::{IdentityLookup, BlakeTwo256, Zero, ConvertInto, OpaqueKeys},
+};
 use sp_runtime::{KeyTypeId, Perbill};
+use traits::{ComputeEraWithParam, MaybeValidators};
+use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
+use std::{cell::RefCell, collections::HashSet};
 
-pub type BlockNumber = u64;
-pub type AccountId = u64;
-pub type Balance = u64;
+pub const INIT_TIMESTAMP: u64 = 30_000;
+pub const BLOCK_TIME: u64 = 1000;
 
-pub const VALIDATOR_A: u64 = 1;
-pub const VALIDATOR_B: u64 = 2;
-pub const VALIDATOR_C: u64 = 3;
-pub const VALIDATOR_D: u64 = 4;
-pub const VALIDATOR_E: u64 = 5;
+/// The AccountId alias in this test module.
+pub(crate) type AccountId = u64;
+pub(crate) type AccountIndex = u64;
+pub(crate) type BlockNumber = u64;
+pub(crate) type Balance = u128;
+
+thread_local! {
+	static SESSION: RefCell<(Vec<AccountId>, HashSet<AccountId>)> = RefCell::new(Default::default());
+}
+
+/// Another session handler struct to test on_disabled.
+pub struct OtherSessionHandler;
+impl pallet_session::OneSessionHandler<AccountId> for OtherSessionHandler {
+	type Key = UintAuthorityId;
+
+	fn on_genesis_session<'a, I: 'a>(_: I)
+		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a {}
+
+	fn on_new_session<'a, I: 'a>(_: bool, validators: I, _: I,)
+		where I: Iterator<Item=(&'a AccountId, Self::Key)>, AccountId: 'a
+	{
+		SESSION.with(|x| {
+			*x.borrow_mut() = (
+				validators.map(|x| x.0.clone()).collect(),
+				HashSet::new(),
+			)
+		});
+	}
+
+	fn on_disabled(validator_index: usize) {
+		SESSION.with(|d| {
+			let mut d = d.borrow_mut();
+			let value = d.0[validator_index];
+			d.1.insert(value);
+		})
+	}
+}
+
+impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
+	type Public = UintAuthorityId;
+}
+
+pub fn is_disabled(controller: AccountId) -> bool {
+	let stash = PlasmRewards::ledger(&controller).unwrap().stash;
+	SESSION.with(|d| d.borrow().1.contains(&stash))
+}
+
+
+pub const ALICE_STASH: u64 = 1;
 
 impl_outer_origin! {
     pub enum Origin for Test {}
@@ -29,8 +86,12 @@ impl_outer_dispatch! {
         pallet_session::Session,
         pallet_balances::Balances,
         plasm_rewards::PlasmRewards,
-        plasm_validator::PlasmStaking,
     }
+}
+
+mod staking {
+	// Re-export needed for `impl_outer_event!`.
+	pub use super::super::*;
 }
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
@@ -39,31 +100,19 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
         .unwrap();
 
     let _ = pallet_balances::GenesisConfig::<Test> {
-        balances: vec![
-            (VALIDATOR_A, 1_000_000_000_000_000_000), // 1 PLM
-            (VALIDATOR_B, 1_000_000_000_000_000_000),
-            (VALIDATOR_C, 1_000_000_000_000_000_000),
-            (VALIDATOR_D, 1_000_000_000_000_000_000),
-        ],
+        balances: vec![(ALICE_STASH, 1_000_000_000_000_000_000)],
     }
     .assimilate_storage(&mut storage);
 
-    let validators_list = vec![VALIDATOR_A, VALIDATOR_B, VALIDATOR_C, VALIDATOR_D];
+    let validators = vec![1, 2];
 
-    let _ = pallet_plasm_rewards::GenesisConfig {
+    let _ = GenesisConfig::<Test> {
         ..Default::default()
     }
     .assimilate_storage(&mut storage);
 
-    let _ = GenesisConfig::<Test> {
-        validators_list: validators_list.clone(),
-        minimum_validator_count: 0,
-        validator_count: 300,
-    }
-    .assimilate_storage(&mut storage);
-
     let _ = pallet_session::GenesisConfig::<Test> {
-        keys: validators_list
+        keys: validators
             .iter()
             .map(|x| (*x, *x, UintAuthorityId(*x)))
             .collect(),
@@ -127,6 +176,7 @@ parameter_types! {
 }
 
 pub struct TestSessionHandler;
+
 impl pallet_session::SessionHandler<u64> for TestSessionHandler {
     const KEY_TYPE_IDS: &'static [KeyTypeId] = &[key_types::DUMMY];
     fn on_genesis_session<T: OpaqueKeys>(_validators: &[(u64, T)]) {}
@@ -153,8 +203,36 @@ impl pallet_session::Trait for Test {
     type WeightInfo = ();
 }
 
+impl pallet_session::historical::Trait for Test {
+    type FullIdentification = crate::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = crate::ExposureOf<Test>;
+}
+
+/// Author of block is always 11
+pub struct Author11;
+impl FindAuthor<AccountId> for Author11 {
+	fn find_author<'a, I>(_digests: I) -> Option<AccountId>
+		where I: 'a + IntoIterator<Item = (frame_support::ConsensusEngineId, &'a [u8])>,
+	{
+		Some(11)
+	}
+}
+
+impl pallet_authorship::Trait for Test {
+	type FindAuthor = Author11;
+	type UncleGenerations = UncleGenerations;
+	type FilterUncle = ();
+	type EventHandler = Module<Test>;
+}
+
 parameter_types! {
-    pub const ExistentialDeposit: Balance = 1_000_000_000_000;
+	pub const UncleGenerations: u64 = 0;
+	pub const DisabledValidatorsThreshold: Perbill = Perbill::from_percent(25);
+}
+
+parameter_types! {
+    pub const ExistentialDeposit: Balance = 10;
+    
 }
 
 impl pallet_balances::Trait for Test {
@@ -167,51 +245,63 @@ impl pallet_balances::Trait for Test {
     type MaxLocks = ();
 }
 
-parameter_types! {
-    pub const SessionsPerEra: sp_staking::SessionIndex = 10;
-    pub const BondingDuration: EraIndex = 3;
+pub struct DummyForSecurityStaking;
+impl ComputeEraWithParam<EraIndex> for DummyForSecurityStaking {
+    type Param = Balance;
+    fn compute(era: &EraIndex) -> Balance {
+        (era * 1_000_000).into()
+    }
 }
 
-impl pallet_plasm_rewards::Trait for Test {
-    type Currency = Balances;
-    type Time = Timestamp;
-    type SessionsPerEra = SessionsPerEra;
-    type BondingDuration = BondingDuration;
-    type ComputeEraForDapps = PlasmStaking;
-    type ComputeEraForSecurity = PlasmStaking;
-    type ComputeTotalPayout = SimpleComputeTotalPayout;
-    type MaybeValidators = PlasmStaking;
-    type Event = ();
+pub struct DummyForDappsStaking;
+impl ComputeEraWithParam<EraIndex> for DummyForDappsStaking {
+    type Param = Balance;
+    fn compute(era: &EraIndex) -> Balance {
+        (era * 200_000).into()
+    }
+}
+
+pub struct DummyMaybeValidators;
+impl MaybeValidators<EraIndex, AccountId> for DummyMaybeValidators {
+    fn compute(current_era: EraIndex) -> Option<Vec<AccountId>> {
+        Some(vec![1, 2, 3, (current_era + 100).into()])
+    }
+}
+
+parameter_types! {
+    pub const SessionsPerEra: sp_staking::SessionIndex = 3;
+    pub const BondingDuration: EraIndex = 3;
+    pub const MaxLocks: u32 = 1024;
+	pub const SlashDeferDuration: EraIndex = 0;
+	pub const ElectionLookahead: BlockNumber = 0;
+	pub const MaxIterations: u32 = 0;
 }
 
 impl Trait for Test {
-    type Currency = Balances;
-    type Time = Timestamp;
+    type CurrencyToVote = crate::traits::SaturatingCurrencyToVote;
     type RewardRemainder = (); // Reward remainder is burned.
     type Slash = ();
     type Reward = (); // Reward is minted.
     type EraFinder = PlasmRewards;
-    type ForSecurityEraReward = PlasmRewards;
-    type ComputeEraParam = u32;
-    type ComputeEra = PlasmStaking;
-    type Event = ();
-    type BondingDuration = ();
+    type SlashDeferDuration = SlashDeferDuration;
+    type Currency = Balances;
+    type Time = Timestamp;
+    type SessionsPerEra = SessionsPerEra;
+    type BondingDuration = BondingDuration;
+    type ComputeEraForDapps = DummyForDappsStaking;
+    type ComputeEraForSecurity = DummyForSecurityStaking;
+    type ComputeTotalPayout = inflation::MaintainRatioComputeTotalPayout<Balance>;
+    type MaybeValidators = DummyMaybeValidators;
     type SessionInterface = Self;
-    type WeightInfo = ();
-    type CurrencyToVote = crate::traits::SaturatingCurrencyToVote;
+    type Event = ();
 }
 
-impl pallet_session::historical::Trait for Test {
-    type FullIdentification = crate::Exposure<AccountId, Balance>;
-    type FullIdentificationOf = crate::ExposureOf<Test>;
-}
-
+/// ValidatorManager module.
 pub type System = frame_system::Module<Test>;
 pub type Session = pallet_session::Module<Test>;
 pub type Balances = pallet_balances::Module<Test>;
 pub type Timestamp = pallet_timestamp::Module<Test>;
-pub type PlasmRewards = pallet_plasm_rewards::Module<Test>;
-pub type PlasmStaking = Module<Test>;
+pub type PlasmRewards = Module<Test>;
 
 pub const PER_SESSION: u64 = 60 * 1000;
 
@@ -228,11 +318,4 @@ pub fn advance_session() {
 
     // on finalize
     PlasmRewards::on_finalize(next);
-}
-
-pub fn advance_era() {
-    let current_era = PlasmRewards::current_era().unwrap();
-    while current_era == PlasmRewards::current_era().unwrap() {
-        advance_session();
-    }
 }

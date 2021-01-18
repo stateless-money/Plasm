@@ -4,8 +4,8 @@ use plasm_primitives::{AccountId, Balance, Signature};
 use plasm_runtime::constants::currency::PLM;
 use plasm_runtime::Block;
 use plasm_runtime::{
-    BabeConfig, BalancesConfig, ContractsConfig, EVMConfig, EthereumConfig, GenesisConfig,
-    GrandpaConfig, IndicesConfig, PlasmLockdropConfig, PlasmRewardsConfig, PlasmValidatorConfig,
+    BabeConfig, BalancesConfig, ContractsConfig, EVMConfig, EthereumConfig, GenesisConfig, StakerStatus,
+    GrandpaConfig, IndicesConfig, PlasmLockdropConfig, PlasmStakingConfig,
     SessionConfig, SessionKeys, SudoConfig, SystemConfig, WASM_BINARY,
 };
 use sc_chain_spec::ChainSpecExtension;
@@ -123,6 +123,8 @@ fn make_genesis(
     root_key: AccountId,
     enable_println: bool,
 ) -> GenesisConfig {
+
+	const STASH: Balance = 1_000_000 * PLM;
     GenesisConfig {
         frame_system: Some(SystemConfig {
             code: WASM_BINARY.to_vec(),
@@ -130,13 +132,15 @@ fn make_genesis(
         }),
         pallet_balances: Some(BalancesConfig { balances }),
         pallet_indices: Some(IndicesConfig { indices: vec![] }),
-        pallet_plasm_rewards: Some(PlasmRewardsConfig {
-            ..Default::default()
-        }),
-        pallet_plasm_staking: Some(PlasmValidatorConfig {
-            validators_list: initial_authorities,
-            minimum_validator_count: 0, // TODO: change this number with the number of initial authorities
-            validator_count: 300
+        pallet_plasm_staking: Some(PlasmStakingConfig {
+            validator_count: initial_authorities.len() as u32 * 2,
+			minimum_validator_count: initial_authorities.len() as u32,
+			stakers: keys.iter().map(|x| {
+				(x.0.clone(), x.0.clone(), STASH, StakerStatus::Validator)
+			}).collect(),
+			invulnerables: keys.iter().map(|x| x.0.clone()).collect(),
+			slash_reward_fraction: Perbill::from_percent(10),
+			.. Default::default()
         }),
         pallet_plasm_lockdrop: Some(PlasmLockdropConfig {
             // Alpha2: 0.44698108660714747

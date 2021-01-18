@@ -55,6 +55,8 @@ pub use pallet_contracts::Gas;
 pub use pallet_timestamp::Call as TimestampCall;
 #[cfg(any(feature = "std", test))]
 pub use sp_runtime::BuildStorage;
+#[cfg(any(feature = "std", test))]
+pub use pallet_plasm_staking::StakerStatus;
 
 /// Deprecated but used runtime interfaces.
 pub mod legacy;

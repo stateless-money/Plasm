@@ -2973,6 +2973,8 @@ impl<T: Trait> Module<T> {
 		<ErasRewardPoints<T>>::remove(era_index);
 		<ErasTotalStake<T>>::remove(era_index);
 		ErasStartSessionIndex::remove(era_index);
+		<ForDappsEraReward<T>>::remove(era_index);
+        <ForSecurityEraReward<T>>::remove(era_index);
 	}
 
 	/// Apply previously-unapplied slashes on the beginning of a new era, after a delay.

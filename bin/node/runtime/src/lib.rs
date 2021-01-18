@@ -297,7 +297,7 @@ impl pallet_plasm_staking::Trait for Runtime {
     type SessionInterface = Self;
     type ComputeEraForDapps = pallet_plasm_staking::DefaultForDappsStaking<Runtime>;
     type ComputeEraForSecurity = pallet_plasm_staking::DefaultForSecurity<Runtime>;
-    type ComputeTotalPayout = pallet_plasm_staking::inflation::CommunityRewards<u32>;
+    type ComputeTotalPayout = pallet_plasm_staking::inflation::CommunityRewards<u128>;
     type Event = Event;
 }
 
@@ -629,7 +629,7 @@ construct_runtime!(
         Contracts: pallet_contracts::{Module, Call, Storage, Event<T>, Config},
         DappsStaking: pallet_dapps_staking::{Module, Call, Storage, Event<T>},
         PlasmLockdrop: pallet_plasm_lockdrop::{Module, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
-        PlasmStaking: pallet_plasm_staking::{Module, Call, Storage, Event<T>, Config},
+        PlasmStaking: pallet_plasm_staking::{Module, Call, Storage, Event<T>, Config<T>},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
         Historical: pallet_session_historical::{Module},
         Babe: pallet_babe::{Module, Call, Storage, Config, Inherent, ValidateUnsigned},

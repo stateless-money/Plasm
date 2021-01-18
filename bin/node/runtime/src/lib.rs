@@ -10,8 +10,11 @@ use frame_support::{
     traits::{FindAuthor, Get, KeyOwnerProofSystem, Randomness},
     weights::{
         constants::{BlockExecutionWeight, ExtrinsicBaseWeight, RocksDbWeight, WEIGHT_PER_SECOND},
-        IdentityFee, Weight,
+        IdentityFee, Weight, DispatchClass
     },
+};
+use frame_system::{
+	EnsureRoot, EnsureOneOf,
 };
 use frontier_rpc_primitives::TransactionStatus;
 use pallet_contracts_rpc_runtime_api::ContractExecResult;
@@ -33,7 +36,7 @@ use sp_core::{H160, H256, U256};
 use sp_inherents::{CheckInherentsResult, InherentData};
 use sp_runtime::traits::{
     BlakeTwo256, Block as BlockT, ConvertInto, Extrinsic, Keccak256, NumberFor, OpaqueKeys,
-    SaturatedConversion, Saturating, StaticLookup, Verify,
+    SaturatedConversion, Saturating, StaticLookup, Verify, Convert
 };
 use sp_runtime::transaction_validity::{
     TransactionPriority, TransactionSource, TransactionValidity,
@@ -228,52 +231,74 @@ impl_opaque_keys! {
 }
 
 impl pallet_session::Trait for Runtime {
-    type SessionManager = PlasmRewards;
+    type SessionManager = PlasmStaking;
     type SessionHandler = <SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
     type ShouldEndSession = Babe;
     type NextSessionRotation = Babe;
     type Event = Event;
     type Keys = SessionKeys;
     type ValidatorId = <Self as frame_system::Trait>::AccountId;
-    type ValidatorIdOf = ConvertInto;
+    type ValidatorIdOf = pallet_plasm_staking::StashOf<Self>;
     type DisabledValidatorsThreshold = ();
     type WeightInfo = ();
 }
 
 impl pallet_session::historical::Trait for Runtime {
-    type FullIdentification = ();
-    type FullIdentificationOf = ();
+	type FullIdentification = pallet_plasm_staking::Exposure<AccountId, Balance>;
+	type FullIdentificationOf = pallet_plasm_staking::ExposureOf<Runtime>;
 }
 
 parameter_types! {
-    pub const SessionsPerEra: pallet_plasm_rewards::SessionIndex = 6;
-    pub const BondingDuration: pallet_plasm_rewards::EraIndex = 24 * 28;
+    pub const SessionsPerEra: pallet_plasm_staking::SessionIndex = 6;
+    pub const BondingDuration: pallet_plasm_staking::EraIndex = 24 * 28;
+    pub const SlashDeferDuration: pallet_plasm_staking::EraIndex = 24 * 7; // 1/4 the bonding duration.
+    pub const StakingUnsignedPriority: u64 = 1 << 20;
+	pub const MaxNominatorRewardedPerValidator: u32 = 256;
+	pub const ElectionLookahead: BlockNumber = EPOCH_DURATION_IN_BLOCKS / 4;
+	pub const MaxIterations: u32 = 10;
+	// 0.05%. The higher the value, the more strict solution acceptance becomes.
+	pub MinSolutionScoreBump: Perbill = Perbill::from_rational_approximation(5u32, 10_000);
 }
 
-impl pallet_plasm_rewards::Trait for Runtime {
-    type Currency = Balances;
-    type Time = Timestamp;
-    type SessionsPerEra = SessionsPerEra;
-    type BondingDuration = BondingDuration;
-    type ComputeEraForDapps = pallet_plasm_rewards::DefaultForDappsStaking<Runtime>;
-    type ComputeEraForSecurity = PlasmValidator;
-    type ComputeTotalPayout = pallet_plasm_rewards::inflation::CommunityRewards<u32>;
-    type MaybeValidators = PlasmValidator;
-    type Event = Event;
+/// Simple structure that exposes how u64 currency can be represented as... u64.
+pub struct CurrencyToVoteHandler;
+impl Convert<Balance, u64> for CurrencyToVoteHandler {
+	fn convert(x: Balance) -> u64 {
+		x.saturated_into()
+	}
 }
+impl Convert<u128, Balance> for CurrencyToVoteHandler {
+	fn convert(x: u128) -> Balance {
+		x
+	}
+}
+
 
 impl pallet_plasm_staking::Trait for Runtime {
     type Currency = Balances;
-    type Time = Timestamp;
-    type RewardRemainder = (); // Reward remainder is burned.
-    type Reward = (); // Reward is minted.
-    type EraFinder = PlasmRewards;
-    type ForSecurityEraReward = PlasmRewards;
-    type ComputeEraParam = u32;
-    type ComputeEra = PlasmValidator;
+    type UnixTime = Timestamp;
+    type CurrencyToVote = CurrencyToVoteHandler;
+    type RewardRemainder = (); // TODO: make treasury
+    type Slash = (); // send the slashed funds to the treasury.
+	type Reward = (); // rewards are minted from the void
+    type SessionsPerEra = SessionsPerEra;
+    type BondingDuration = BondingDuration;
+    type SlashDeferDuration = SlashDeferDuration;
+	/// A super-majority of the council can cancel the slash.
+	type SlashCancelOrigin = EnsureRoot<AccountId>;
+    type NextNewSession = Session;
+	type ElectionLookahead = ElectionLookahead;
+	type Call = Call;
+	type MaxIterations = MaxIterations;
+	type MinSolutionScoreBump = MinSolutionScoreBump;
+	type MaxNominatorRewardedPerValidator = MaxNominatorRewardedPerValidator;
+	type UnsignedPriority = StakingUnsignedPriority;
+	type WeightInfo = pallet_plasm_staking::weights::SubstrateWeight<Runtime>;
+    type SessionInterface = Self;
+    type ComputeEraForDapps = pallet_plasm_staking::DefaultForDappsStaking<Runtime>;
+    type ComputeEraForSecurity = pallet_plasm_staking::DefaultForSecurity<Runtime>;
+    type ComputeTotalPayout = pallet_plasm_staking::inflation::CommunityRewards<u32>;
     type Event = Event;
-    type CurrencyToVote = pallet_plasm_staking::traits::SaturatingCurrencyToVote;
-    type WeightInfo = pallet_plasm_staking::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_dapps_staking::Trait for Runtime {
@@ -284,9 +309,9 @@ impl pallet_dapps_staking::Trait for Runtime {
     type Reward = (); // Reward is minted.
     type Time = Timestamp;
     type ComputeRewardsForDapps = pallet_dapps_staking::rewards::VoidableRewardsForDapps;
-    type EraFinder = PlasmRewards;
-    type ForDappsEraReward = PlasmRewards;
-    type HistoryDepthFinder = PlasmRewards;
+    type EraFinder = PlasmStaking;
+    type ForDappsEraReward = PlasmStaking;
+    type HistoryDepthFinder = PlasmStaking;
     type Event = Event;
 }
 
@@ -604,7 +629,6 @@ construct_runtime!(
         Contracts: pallet_contracts::{Module, Call, Storage, Event<T>, Config},
         DappsStaking: pallet_dapps_staking::{Module, Call, Storage, Event<T>},
         PlasmLockdrop: pallet_plasm_lockdrop::{Module, Call, Storage, Event<T>, Config<T>, ValidateUnsigned},
-        PlasmValidator: pallet_plasm_staking::{Module, Call, Storage, Event<T>, Config<T>},
         PlasmStaking: pallet_plasm_staking::{Module, Call, Storage, Event<T>, Config},
         Session: pallet_session::{Module, Call, Storage, Event, Config<T>},
         Historical: pallet_session_historical::{Module},

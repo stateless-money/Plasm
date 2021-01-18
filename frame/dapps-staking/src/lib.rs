@@ -17,7 +17,7 @@ use frame_support::{
 };
 use frame_system::{self as system, ensure_signed};
 use pallet_contract_operator::ContractFinder;
-use pallet_plasm_rewards::{
+use pallet_plasm_staking::{
     traits::{ComputeEraWithParam, EraFinder, ForDappsEraRewardFinder, HistoryDepthFinder},
     EraIndex, Releases,
 };
@@ -236,7 +236,7 @@ pub trait Trait: pallet_session::Trait {
     type ComputeRewardsForDapps: ComputeRewardsForDapps;
 
     /// The information of era.
-    type EraFinder: EraFinder<EraIndex, SessionIndex, MomentOf<Self>>;
+    type EraFinder: EraFinder<EraIndex, SessionIndex>;
 
     /// The rewards for dapps operator.
     type ForDappsEraReward: ForDappsEraRewardFinder<BalanceOf<Self>>;

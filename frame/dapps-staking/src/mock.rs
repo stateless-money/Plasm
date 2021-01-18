@@ -283,7 +283,7 @@ parameter_types! {
     pub const BondingDuration: EraIndex = 3;
 }
 
-impl pallet_plasm_rewards::Trait for Test {
+impl pallet_plasm_staking::Trait for Test {
     type Currency = Balances;
     type Time = Timestamp;
     type SessionsPerEra = SessionsPerEra;

@@ -301,14 +301,13 @@ use frame_support::{
 		WithPostDispatchInfo,
 	},
 	traits::{
-		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get, Time,
+		Currency, LockIdentifier, LockableCurrency, WithdrawReasons, OnUnbalanced, Imbalance, Get,
 		UnixTime, EstimateNextNewSession, EnsureOrigin,
 	}
 };
 use pallet_session::historical;
 use sp_runtime::{
 	Percent, Perbill, PerU16, PerThing, RuntimeDebug, DispatchError,
-	curve::PiecewiseLinear,
 	traits::{
 		Convert, Zero, StaticLookup, CheckedSub, Saturating, SaturatedConversion,
 		AtLeast32BitUnsigned, Dispatchable,

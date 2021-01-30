@@ -1,10 +1,10 @@
 FROM paritytech/ci-linux:production as builder
-LABEL description="This is the build stage for Polkadot. Here we create the binary."
+LABEL description="This is the build stage for Plasm. Here we create the binary."
 
 ARG PROFILE=release
-WORKDIR /polkadot
+WORKDIR /plasm
 
-COPY . /polkadot
+COPY . /plasm
 
 RUN cargo build --$PROFILE
 
@@ -13,17 +13,17 @@ RUN cargo build --$PROFILE
 FROM debian:buster-slim
 LABEL description="This is the 2nd stage: a very small image where we copy the Polkadot binary."
 ARG PROFILE=release
-COPY --from=builder /polkadot/target/$PROFILE/polkadot /usr/local/bin
+COPY --from=builder /plasm/target/$PROFILE/plasm /usr/local/bin
 
-RUN useradd -m -u 1000 -U -s /bin/sh -d /polkadot polkadot && \
-	mkdir -p /polkadot/.local/share && \
+RUN useradd -m -u 1000 -U -s /bin/sh -d /plasm plasm && \
+	mkdir -p /plasm/.local/share && \
 	mkdir /data && \
-	chown -R polkadot:polkadot /data && \
-	ln -s /data /polkadot/.local/share/polkadot && \
+	chown -R plasm:plasm /data && \
+	ln -s /data /plasm/.local/share/plasm && \
 	rm -rf /usr/bin /usr/sbin
 
-USER polkadot
+USER plasm
 EXPOSE 30333 9933 9944
 VOLUME ["/data"]
 
-CMD ["/usr/local/bin/polkadot"]
+CMD ["/usr/local/bin/plasm"]
